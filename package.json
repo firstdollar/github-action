@@ -30,11 +30,11 @@
   "homepage": "https://github.com/cypress-io/github-action#readme",
   "dependencies": {
     "@actions/core": "1.2.4",
-    "@actions/exec": "1.0.1",
-    "@actions/io": "1.0.1",
-    "@octokit/core": "2.5.3",
+    "@actions/exec": "1.0.4",
+    "@actions/io": "1.0.2",
+    "@octokit/core": "2.5.4",
     "argument-vector": "1.0.2",
-    "cache": "github:cypress-io/github-actions-cache#8bec6cc",
+    "cache": "github:cypress-io/github-actions-cache#bc821d0",
     "execa": "3.3.0",
     "find-yarn-workspace-root": "1.2.1",
     "got": "9.6.0",
@@ -42,10 +42,10 @@
     "quote": "0.4.0"
   },
   "devDependencies": {
-    "@types/node": "12.12.37",
-    "@zeit/ncc": "0.22.1",
-    "husky": "3.0.9",
-    "markdown-link-check": "3.8.0",
+    "@types/node": "12.12.54",
+    "@zeit/ncc": "0.22.3",
+    "husky": "3.1.0",
+    "markdown-link-check": "3.8.1",
     "prettier": "1.19.1",
     "stop-build": "1.1.0"
   },

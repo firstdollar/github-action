@@ -5894,6 +5894,10 @@ const getCiBuildId = async () => {
   let parallelId = `${GITHUB_WORKFLOW} - ${GITHUB_SHA}`
 
   if (GITHUB_TOKEN) {
+    core.debug(
+      `Determining build id by asking GitHub about run ${GITHUB_RUN_ID}`
+    )
+
     const client = new Octokit({
       auth: GITHUB_TOKEN
     })
@@ -5909,9 +5913,15 @@ const getCiBuildId = async () => {
 
     if (resp && resp.data && resp.data.head_branch) {
       branch = resp.data.head_branch
-      // core.exportVariable('GH_BRANCH', resp.data.head_branch)
+      core.debug(`found the branch name ${branch}`)
     }
 
+    // This will return the complete list of jobs for a run with their steps,
+    // this should always return data when there are jobs on the workflow.
+    // Every time the workflow is re-run the jobs length should stay the same
+    // (because the same amount of jobs were ran) but the id of them should change
+    // letting us, select the first id as unique id
+    // https://docs.github.com/en/rest/reference/actions#list-jobs-for-a-workflow-run
     const runsList = await client.request(
       'GET /repos/:owner/:repo/actions/runs/:run_id/jobs',
       {
@@ -5921,11 +5931,17 @@ const getCiBuildId = async () => {
       }
     )
 
-    if (runsList && runsList.data) {
-      // Use the total_count, every time a job is restarted the list has
-      // the number of jobs including current run and previous runs, every time
-      // it appends the result.
-      parallelId = `${GITHUB_RUN_ID}-${runsList.data.total_count}`
+    if (
+      runsList &&
+      runsList.data &&
+      runsList.data.jobs &&
+      runsList.data.jobs.length
+    ) {
+      const jobId = runsList.data.jobs[0].id
+      core.debug(`fetched run list with jobId ${jobId}`)
+      parallelId = `${GITHUB_RUN_ID}-${jobId}`
+    } else {
+      core.debug('could not get run list data')
     }
   }
 
@@ -6031,6 +6047,11 @@ const runTestsUsingCommandLine = async () => {
     cmd.push(envInput)
   }
 
+  const quiet = getInputBool('quiet')
+  if (quiet) {
+    cmd.push('--quiet')
+  }
+
   console.log('Cypress test command: npx %s', cmd.join(' '))
 
   // since we have quoted arguments ourselves, do not double quote them
@@ -6047,6 +6068,11 @@ const runTestsUsingCommandLine = async () => {
   return exec.exec(quote(npxPath), cmd, opts)
 }
 
+/**
+ * Run Cypress tests by collecting input parameters
+ * and using Cypress module API to run tests.
+ * @see https://on.cypress.io/module-api
+ */
 const runTests = async () => {
   const runTests = getInputBool('runTests', true)
   if (!runTests) {
@@ -6082,7 +6108,8 @@ const runTests = async () => {
   const cypressOptions = {
     headless: getInputBool('headless'),
     record: getInputBool('record'),
-    parallel: getInputBool('parallel')
+    parallel: getInputBool('parallel'),
+    quiet: getInputBool('quiet')
   }
 
   if (core.getInput('group')) {
@@ -6136,7 +6163,7 @@ const runTests = async () => {
       }
 
       return Promise.reject(
-        new Error(testResults.message || 'Tests failed')
+        new Error(testResults.message || 'Error running Cypress')
       )
     }
 
@@ -6146,7 +6173,11 @@ const runTests = async () => {
     core.debug(`Dashboard url ${dashboardUrl}`)
     core.setOutput('dashboardUrl', dashboardUrl)
 
-    return testResults.totalFailed
+    if (testResults.totalFailed) {
+      throw Promise.reject(
+        new Error(`Cypress tests: ${testResults.totalFailed} failed`)
+      )
+    }
   }
 
   const onTestsError = e => {
@@ -6202,6 +6233,8 @@ installMaybe()
     process.exit(0)
   })
   .catch(error => {
+    // final catch - when anything goes wrong, throw an error
+    // and exit the action with non-zero code
     console.log(error)
     core.setFailed(error.message)
     process.exit(1)
@@ -24803,7 +24836,7 @@ module.exports = function isExtendable(val) {
 /* 482 */
 /***/ (function(module) {
 
-module.exports = {"_from":"got","_id":"got@9.6.0","_inBundle":false,"_integrity":"sha512-R7eWptXuGYxwijs0eV+v3o6+XH1IqVK8dJOEecQfTmkncw9AV4dcw/Dhxi8MdlqPthxxpZyizMzyg8RTmEsG+Q==","_location":"/got","_phantomChildren":{"pump":"3.0.0"},"_requested":{"type":"tag","registry":true,"raw":"got","name":"got","escapedName":"got","rawSpec":"","saveSpec":null,"fetchSpec":"latest"},"_requiredBy":["#USER","/"],"_resolved":"https://registry.npmjs.org/got/-/got-9.6.0.tgz","_shasum":"edf45e7d67f99545705de1f7bbeeeb121765ed85","_spec":"got","_where":"/Users/gleb/git/github-action","ava":{"concurrency":4},"browser":{"decompress-response":false,"electron":false},"bugs":{"url":"https://github.com/sindresorhus/got/issues"},"bundleDependencies":false,"dependencies":{"@sindresorhus/is":"^0.14.0","@szmarczak/http-timer":"^1.1.2","cacheable-request":"^6.0.0","decompress-response":"^3.3.0","duplexer3":"^0.1.4","get-stream":"^4.1.0","lowercase-keys":"^1.0.1","mimic-response":"^1.0.1","p-cancelable":"^1.0.0","to-readable-stream":"^1.0.0","url-parse-lax":"^3.0.0"},"deprecated":false,"description":"Simplified HTTP requests","devDependencies":{"ava":"^1.1.0","coveralls":"^3.0.0","delay":"^4.1.0","form-data":"^2.3.3","get-port":"^4.0.0","np":"^3.1.0","nyc":"^13.1.0","p-event":"^2.1.0","pem":"^1.13.2","proxyquire":"^2.0.1","sinon":"^7.2.2","slow-stream":"0.0.4","tempfile":"^2.0.0","tempy":"^0.2.1","tough-cookie":"^3.0.0","xo":"^0.24.0"},"engines":{"node":">=8.6"},"files":["source"],"homepage":"https://github.com/sindresorhus/got#readme","keywords":["http","https","get","got","url","uri","request","util","utility","simple","curl","wget","fetch","net","network","electron"],"license":"MIT","main":"source","name":"got","repository":{"type":"git","url":"git+https://github.com/sindresorhus/got.git"},"scripts":{"release":"np","test":"xo && nyc ava"},"version":"9.6.0"};
+module.exports = {"_args":[["got@9.6.0","/Users/alejandroestrada/Documents/Code/cypress/github-action"]],"_from":"got@9.6.0","_id":"got@9.6.0","_inBundle":false,"_integrity":"sha512-R7eWptXuGYxwijs0eV+v3o6+XH1IqVK8dJOEecQfTmkncw9AV4dcw/Dhxi8MdlqPthxxpZyizMzyg8RTmEsG+Q==","_location":"/got","_phantomChildren":{"pump":"3.0.0"},"_requested":{"type":"version","registry":true,"raw":"got@9.6.0","name":"got","escapedName":"got","rawSpec":"9.6.0","saveSpec":null,"fetchSpec":"9.6.0"},"_requiredBy":["/"],"_resolved":"https://registry.npmjs.org/got/-/got-9.6.0.tgz","_spec":"9.6.0","_where":"/Users/alejandroestrada/Documents/Code/cypress/github-action","ava":{"concurrency":4},"browser":{"decompress-response":false,"electron":false},"bugs":{"url":"https://github.com/sindresorhus/got/issues"},"dependencies":{"@sindresorhus/is":"^0.14.0","@szmarczak/http-timer":"^1.1.2","cacheable-request":"^6.0.0","decompress-response":"^3.3.0","duplexer3":"^0.1.4","get-stream":"^4.1.0","lowercase-keys":"^1.0.1","mimic-response":"^1.0.1","p-cancelable":"^1.0.0","to-readable-stream":"^1.0.0","url-parse-lax":"^3.0.0"},"description":"Simplified HTTP requests","devDependencies":{"ava":"^1.1.0","coveralls":"^3.0.0","delay":"^4.1.0","form-data":"^2.3.3","get-port":"^4.0.0","np":"^3.1.0","nyc":"^13.1.0","p-event":"^2.1.0","pem":"^1.13.2","proxyquire":"^2.0.1","sinon":"^7.2.2","slow-stream":"0.0.4","tempfile":"^2.0.0","tempy":"^0.2.1","tough-cookie":"^3.0.0","xo":"^0.24.0"},"engines":{"node":">=8.6"},"files":["source"],"homepage":"https://github.com/sindresorhus/got#readme","keywords":["http","https","get","got","url","uri","request","util","utility","simple","curl","wget","fetch","net","network","electron"],"license":"MIT","main":"source","name":"got","repository":{"type":"git","url":"git+https://github.com/sindresorhus/got.git"},"scripts":{"release":"np","test":"xo && nyc ava"},"version":"9.6.0"};
 
 /***/ }),
 /* 483 */,
