@@ -4,6 +4,36 @@
 
 ## Examples
 
+- [Basic](#basic)
+- [Explicit version](#explicit-version)
+- Run tests in a given [browser](#browser)
+    * using [Firefox](#firefox)
+    * using [Edge](#edge)
+    * using [headless mode](#headless)
+- Using [Docker image](#docker-image)
+- Specify [environment variables](#env)
+- Run only some [spec files](#specs)
+- Test [project in subfolder](#project)
+- [Record results](#record-test-results-on-cypress-dashboard) on Cypress Dashboard
+- Tag [recordings](#tag-recordings)
+- [Quiet output](#quiet-flag)
+- Store [test artifacts](#artifacts) on GitHub
+- Set Cypress [config values](#config)
+- Use specific [config file](#config-file)
+- Run tests in [parallel](#parallel)
+- [Build app](#build-app) before running the tests
+- [Start server](#start-server) before running the tests
+- [Wait for server](#wait-on) before running the tests
+- use [command prefix](#command-prefix)
+- use [own custom test command](#custom-test-command)
+- pass [custom build id](#custom-build-id) when recording to Dashboard
+- use different [working-directory](#working-directory)
+- use [custom cache key](#custom-cache-key)
+- run tests on multiple [Node versions](#node-versions)
+- split [install and tests](#split-install-and-tests) into separate jobs
+- use [custom install commands](#custom-install)
+- [more examples](#more-examples)
+
 ### Basic
 
 ```yml
@@ -22,6 +52,26 @@ jobs:
 ```
 
 [![Basic example](https://github.com/cypress-io/github-action/workflows/example-basic/badge.svg?branch=master)](.github/workflows/example-basic.yml)
+
+### Explicit version
+
+**Best practice:**
+
+Our examples specify the tag of the action to use listing only the major version `@v2`
+
+```yml
+- name: Cypress run
+  uses: cypress-io/github-action@v2
+```
+
+When using `cypress-io/github-action@v2` from your workflow file, you automatically will be using the latest [tagged version from this repository](https://github.com/cypress-io/github-action/tags). If you want to precisely control the version of this module, use the full tag version, for example:
+
+```yml
+- name: Cypress run
+  uses: cypress-io/github-action@v2.2.7
+```
+
+By using the full version tag, you will avoid accidentally using a newer version of the action.
 
 ### Browser
 
@@ -43,44 +93,6 @@ jobs:
 ```
 
 [![Chrome example](https://github.com/cypress-io/github-action/workflows/example-chrome/badge.svg?branch=master)](.github/workflows/example-chrome.yml)
-
-### Headless
-
-Run the browser in headless mode
-
-```yml
-name: Chrome headless
-on: [push]
-jobs:
-  cypress-run:
-    runs-on: ubuntu-16.04
-    steps:
-      - uses: actions/checkout@v1
-      - uses: cypress-io/github-action@v2
-        with:
-          browser: chrome
-          headless: true
-```
-
-### Docker image
-
-You can run tests in a GH Action in your Docker container.
-
-```yml
-name: E2E in custom container
-on: [push]
-jobs:
-  cypress-run:
-    runs-on: ubuntu-16.04
-    # Cypress Docker image with Chrome v78
-    # and Firefox v70 pre-installed
-    container: cypress/browsers:node12.13.0-chrome78-ff70
-    steps:
-      - uses: actions/checkout@v1
-      - uses: cypress-io/github-action@v2
-        with:
-          browser: chrome
-```
 
 ### Firefox
 
@@ -124,6 +136,44 @@ jobs:
 [![Edge example](https://github.com/cypress-io/github-action/workflows/example-edge/badge.svg?branch=master)](.github/workflows/example-edge.yml)
 
 **Note:** Microsoft has not released Edge for Linux yet, thus you need to run these tests on Windows or Mac runners with Edge preinstalled. You can use [`cypress info`](https://on.cypress.io/command-line#cypress-info) command to see the browsers installed on the machine.
+
+### Headless
+
+Run the browser in headless mode
+
+```yml
+name: Chrome headless
+on: [push]
+jobs:
+  cypress-run:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: cypress-io/github-action@v2
+        with:
+          browser: chrome
+          headless: true
+```
+
+### Docker image
+
+You can run tests in a GH Action in your Docker container.
+
+```yml
+name: E2E in custom container
+on: [push]
+jobs:
+  cypress-run:
+    runs-on: ubuntu-16.04
+    # Cypress Docker image with Chrome v78
+    # and Firefox v70 pre-installed
+    container: cypress/browsers:node12.13.0-chrome78-ff70
+    steps:
+      - uses: actions/checkout@v1
+      - uses: cypress-io/github-action@v2
+        with:
+          browser: chrome
+```
 
 ### Env
 
@@ -343,6 +393,8 @@ jobs:
           config: pageLoadTimeout=100000,baseUrl=http://localhost:3000
 ```
 
+[![example-config](https://github.com/cypress-io/github-action/workflows/example-config/badge.svg?branch=master)](.github/workflows/example-config.yml)
+
 ### Config File
 
 Specify the path to your config file with `config-file` parameter
@@ -408,7 +460,7 @@ jobs:
 
 ![Parallel run](images/parallel.png)
 
-**Warning ⚠️:** Cypress action use `GITHUB_TOKEN` to get the correct branch and the number of jobs runed, making it possible to re-run without the need of pushing an empty commit. If you don't want to use the `GITHUB_TOKEN` you can still run your tests without problem with the only note that Cypress Dashboard API connects parallel jobs into a single logical run using GitHub commit SHA plus workflow name. If you attempt to re-run GitHub checks, the Dashboard thinks the run has already ended. In order to truly rerun parallel jobs, push an empty commit with `git commit --allow-empty -m "re-run checks" && git push`. As another work around you can generate and cache a custom build id, read [Adding a unique build number to GitHub Actions](https://medium.com/attest-engineering/adding-a-unique-github-build-identifier-7aa2e83cadca)
+**Warning ⚠️:** Cypress actions use `GITHUB_TOKEN` to get the correct branch and the number of jobs run, making it possible to re-run without the need of pushing an empty commit. If you don't want to use the `GITHUB_TOKEN` you can still run your tests without problem with the only note that Cypress Dashboard API connects parallel jobs into a single logical run using GitHub commit SHA plus workflow name. If you attempt to re-run GitHub checks, the Dashboard thinks the run has already ended. In order to truly rerun parallel jobs, push an empty commit with `git commit --allow-empty -m "re-run checks" && git push`. As another work around you can generate and cache a custom build id, read [Adding a unique build number to GitHub Actions](https://medium.com/attest-engineering/adding-a-unique-github-build-identifier-7aa2e83cadca)
 
 ### Build app
 
@@ -491,6 +543,8 @@ jobs:
           wait-on: 'http://localhost:8080'
 ```
 
+[![wait-on example](https://github.com/cypress-io/github-action/workflows/example-wait-on/badge.svg?branch=master)](.github/workflows/example-wait-on.yml)
+
 By default, `wait-on` will retry for 60 seconds. You can pass a custom timeout in seconds using `wait-on-timeout`.
 
 ```yml
@@ -538,7 +592,7 @@ steps:
     uses: actions/checkout@v1
 
   - name: Custom tests 🧪
-    uses: cypress-io/github-action@1
+    uses: cypress-io/github-action@v1
     with:
       command: npm run e2e:ci
 ```
@@ -786,6 +840,8 @@ Name | Description
 
 This action installs local dependencies using lock files. If `yarn.lock` file is found, the install uses `yarn --frozen-lockfile` command. Otherwise it expects to find `package-lock.json` and install using `npm ci` command.
 
+This action uses several production dependencies. The minimum Node version required to run this action depends on the minimum Node required by the dependencies.
+
 ### Debugging
 
 You can see verbose messages from GitHub Actions by setting the following secrets (from [Debugging Actions Guide](https://github.com/actions/toolkit/blob/master/docs/action-debugging.md#step-debug-logs))
@@ -794,6 +850,8 @@ You can see verbose messages from GitHub Actions by setting the following secret
 ACTIONS_RUNNER_DEBUG: true
 ACTIONS_STEP_DEBUG: true
 ```
+
+The `ACTIONS_RUNNER_DEBUG` will show generic Actions messages, while `ACTIONS_STEP_DEBUG` will enable the `core.debug(...)` messages from this actions.
 
 ## Development
 

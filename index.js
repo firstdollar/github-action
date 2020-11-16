@@ -1,43 +1,17 @@
 // @ts-check
+const { restoreCache, saveCache } = require('@actions/cache')
 const core = require('@actions/core')
 const exec = require('@actions/exec')
 const io = require('@actions/io')
 const { Octokit } = require('@octokit/core')
 const hasha = require('hasha')
-const got = require('got')
-const { restoreCache, saveCache } = require('cache/lib/index')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const quote = require('quote')
 const cliParser = require('argument-vector')()
 const findYarnWorkspaceRoot = require('find-yarn-workspace-root')
-const { debug } = require('console')
-
-/**
- * A small utility for checking when an URL responds, kind of
- * a poor man's https://www.npmjs.com/package/wait-on
- */
-const ping = (url, timeout) => {
-  const start = +new Date()
-  return got(url, {
-    retry: {
-      retries(retry, error) {
-        const now = +new Date()
-        core.debug(
-          `${now - start}ms ${error.method} ${error.host} ${
-            error.code
-          }`
-        )
-        if (now - start > timeout) {
-          console.error('%s timed out', url)
-          return 0
-        }
-        return 1000
-      }
-    }
-  })
-}
+const { ping } = require('./src/ping')
 
 /**
  * Parses input command, finds the tool and
@@ -82,8 +56,12 @@ const homeDirectory = os.homedir()
 const platformAndArch = `${process.platform}-${process.arch}`
 
 const startWorkingDirectory = process.cwd()
-const workingDirectory =
-  core.getInput('working-directory') || process.cwd()
+// seems the working directory should be absolute to work correctly
+// https://github.com/cypress-io/github-action/issues/211
+const workingDirectory = core.getInput('working-directory')
+  ? path.resolve(core.getInput('working-directory'))
+  : startWorkingDirectory
+core.debug(`working directory ${workingDirectory}`)
 
 /**
  * When running "npm install" or any other Cypress-related commands,
@@ -106,7 +84,9 @@ const useYarn = () => fs.existsSync(yarnFilename)
 
 const lockHash = () => {
   const lockFilename = useYarn() ? yarnFilename : packageLockFilename
-  return hasha.fromFileSync(lockFilename)
+  const fileHash = hasha.fromFileSync(lockFilename)
+  core.debug(`Hash from file ${lockFilename} is ${fileHash}`)
+  return fileHash
 }
 
 // enforce the same NPM cache folder across different operating systems
@@ -131,6 +111,8 @@ const getNpmCache = () => {
     o.inputPath = NPM_CACHE_FOLDER
   }
 
+  // use exact restore key to prevent NPM cache from growing
+  // https://glebbahmutov.com/blog/do-not-let-npm-cache-snowball/
   o.restoreKeys = o.primaryKey = key
   return o
 }
@@ -148,46 +130,58 @@ core.debug(
 
 const getCypressBinaryCache = () => {
   const o = {
-    inputPath: CYPRESS_CACHE_FOLDER,
-    restoreKeys: `cypress-${platformAndArch}-`
+    inputPath: CYPRESS_CACHE_FOLDER
   }
-  o.primaryKey = o.restoreKeys + lockHash()
+  const hash = lockHash()
+  const key = `cypress-${platformAndArch}-${hash}`
+
+  // use only exact restore key to prevent cached folder growing in size
+  // https://glebbahmutov.com/blog/do-not-let-cypress-cache-snowball/
+  o.restoreKeys = o.primaryKey = key
   return o
 }
 
 const restoreCachedNpm = () => {
   core.debug('trying to restore cached NPM modules')
   const NPM_CACHE = getNpmCache()
-  return restoreCache(
-    NPM_CACHE.inputPath,
-    NPM_CACHE.primaryKey,
+  return restoreCache([NPM_CACHE.inputPath], NPM_CACHE.primaryKey, [
     NPM_CACHE.restoreKeys
-  )
+  ]).catch(e => {
+    console.warn('Restoring NPM cache error: %s', e.message)
+  })
 }
 
 const saveCachedNpm = () => {
   core.debug('saving NPM modules')
   const NPM_CACHE = getNpmCache()
-  return saveCache(NPM_CACHE.inputPath, NPM_CACHE.primaryKey)
+  return saveCache([NPM_CACHE.inputPath], NPM_CACHE.primaryKey).catch(
+    e => {
+      console.warn('Saving NPM cache error: %s', e.message)
+    }
+  )
 }
 
 const restoreCachedCypressBinary = () => {
   core.debug('trying to restore cached Cypress binary')
   const CYPRESS_BINARY_CACHE = getCypressBinaryCache()
   return restoreCache(
-    CYPRESS_BINARY_CACHE.inputPath,
+    [CYPRESS_BINARY_CACHE.inputPath],
     CYPRESS_BINARY_CACHE.primaryKey,
-    CYPRESS_BINARY_CACHE.restoreKeys
-  )
+    [CYPRESS_BINARY_CACHE.restoreKeys]
+  ).catch(e => {
+    console.warn('Restoring Cypress cache error: %s', e.message)
+  })
 }
 
 const saveCachedCypressBinary = () => {
   core.debug('saving Cypress binary')
   const CYPRESS_BINARY_CACHE = getCypressBinaryCache()
   return saveCache(
-    CYPRESS_BINARY_CACHE.inputPath,
+    [CYPRESS_BINARY_CACHE.inputPath],
     CYPRESS_BINARY_CACHE.primaryKey
-  )
+  ).catch(e => {
+    console.warn('Saving Cypress cache error: %s', e.message)
+  })
 }
 
 const install = () => {
@@ -219,8 +213,24 @@ const install = () => {
   }
 }
 
+const listCypressBinaries = () => {
+  core.debug(
+    `Cypress versions in the cache folder ${CYPRESS_CACHE_FOLDER}`
+  )
+  core.exportVariable('CYPRESS_CACHE_FOLDER', CYPRESS_CACHE_FOLDER)
+  return io.which('npx', true).then(npxPath => {
+    return exec.exec(
+      quote(npxPath),
+      ['cypress', 'cache', 'list'],
+      cypressCommandOptions
+    )
+  })
+}
+
 const verifyCypressBinary = () => {
-  core.debug('Verifying Cypress')
+  core.debug(
+    `Verifying Cypress using cache folder ${CYPRESS_CACHE_FOLDER}`
+  )
   core.exportVariable('CYPRESS_CACHE_FOLDER', CYPRESS_CACHE_FOLDER)
   return io.which('npx', true).then(npxPath => {
     return exec.exec(
@@ -543,6 +553,7 @@ const runTests = async () => {
   }
   if (core.getInput('config')) {
     cypressOptions.config = core.getInput('config')
+    core.debug(`Cypress config "${cypressOptions.config}"`)
   }
   if (core.getInput('spec')) {
     cypressOptions.spec = core.getInput('spec')
@@ -593,11 +604,16 @@ const runTests = async () => {
     core.debug(`Cypress tests: ${testResults.totalFailed} failed`)
 
     const dashboardUrl = testResults.runUrl
-    core.debug(`Dashboard url ${dashboardUrl}`)
+    if (dashboardUrl) {
+      core.debug(`Dashboard url ${dashboardUrl}`)
+    } else {
+      core.debug('There is no Dashboard url')
+    }
+    // we still set the output explicitly
     core.setOutput('dashboardUrl', dashboardUrl)
 
     if (testResults.totalFailed) {
-      throw Promise.reject(
+      return Promise.reject(
         new Error(`Cypress tests: ${testResults.totalFailed} failed`)
       )
     }
@@ -631,14 +647,18 @@ const installMaybe = () => {
     core.debug(`cypress cache hit ${cypressCacheHit}`)
 
     return install().then(() => {
-      if (npmCacheHit && cypressCacheHit) {
-        core.debug('no need to verify Cypress binary or save caches')
-        return
-      }
+      return listCypressBinaries().then(() => {
+        if (npmCacheHit && cypressCacheHit) {
+          core.debug(
+            'no need to verify Cypress binary or save caches'
+          )
+          return Promise.resolve(undefined)
+        }
 
-      return verifyCypressBinary()
-        .then(saveCachedNpm)
-        .then(saveCachedCypressBinary)
+        return verifyCypressBinary()
+          .then(saveCachedNpm)
+          .then(saveCachedCypressBinary)
+      })
     })
   })
 }
@@ -658,7 +678,9 @@ installMaybe()
   .catch(error => {
     // final catch - when anything goes wrong, throw an error
     // and exit the action with non-zero code
-    console.log(error)
+    core.debug(error.message)
+    core.debug(error.stack)
+
     core.setFailed(error.message)
     process.exit(1)
   })
